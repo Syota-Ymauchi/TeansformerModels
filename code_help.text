@@ -43,3 +43,27 @@ qkv = qkv.view(bs, ns, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
 nn.Linear の出力に torch.view を使える理由
 nn.Linear の出力は通常、計算の過程で新たに生成されたテンソルであり、デフォルトでは連続的なメモリレイアウトを持ってる
 このため、nn.Linear の出力には直接 torch.view を適用しても問題ない
+
+"""
+qlv.unbind(0)
+"""
+torch.unbind() は PyTorch の関数で、指定した次元に沿ってテンソルを分解し、タプルとして返す
+
+例
+"""
+import torch
+
+# サンプルテンソル
+x = torch.tensor([[1, 2, 3],
+                  [4, 5, 6],
+                  [7, 8, 9]])
+
+# 第0次元 (行) に沿って分解
+rows = torch.unbind(x, dim=0)
+print(rows)
+# 出力: (tensor([1, 2, 3]), tensor([4, 5, 6]), tensor([7, 8, 9]))
+# 第1次元 (列) に沿って分解
+cols = torch.unbind(x, dim=1)
+print(cols)
+# 出力: (tensor([1, 4, 7]), tensor([2, 5, 8]), tensor([3, 6, 9]))
+"""

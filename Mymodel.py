@@ -52,6 +52,7 @@ class VisionTransformer(nn.Module):
         Args:
             x(torch.Tensor): input data shapeは[32, 3, 32, 32]
         """
+        # ------特徴マップ生成機構の適用------
         bs, c, h, w = x.shape
 
         # 1毎の画像を4毎のパッチに分割する
