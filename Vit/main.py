@@ -103,7 +103,7 @@ def main():
                 optimizer.step()
 
                 total_loss += loss.item()
-                accuracy = (preds.argmax(dim=1) == y).float().mean()
+                total_accuracy += (preds.argmax(dim=1) == y).float().mean().item()
             
             # エポック毎の損失と正解率を計算
             train_losses.append(total_loss / len(train_loader))
@@ -144,7 +144,8 @@ def main():
         axs[2].legend()
         plt.tight_layout()
         plt.show()
-
+    # 学習と検証を行う
+    train_eval()
 if __name__ == '__main__':
     main()
    
