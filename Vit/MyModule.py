@@ -54,13 +54,13 @@ class MultiHeadSelfAttention(nn.Module):
         # 全結合層expantion_layerに入力してデータを拡張
         # 入力: (バッチサイズ, 5, 512)
         # 出力: (バッチサイズ, 5, 1536[512×3])
-        qkv = self.expantion_layer(x)
+        qkv = self.expansion_layer(x)
 
         # view()の処理
         # データ拡張したテンソル(バッチサイズ, 5, 1536)を
         # クリエ行列、キー行列、バリュー行列に分割 -> (バッチサイズ, 5, 3, 512)
         # さらにマルチヘッドに分割 -> (バッチサイズ, 5, 3, 128)
-        # .permuteの処理
+        # .permute()の処理
         # クリエ、キー、バリューの次元をテンソルの先頭に移動して
         # (3, バッチサイズ, ヘッド数, 特長量数, 特徴量数の次元)の形状にする
         # これにより、クリエ、キー、バリューが別々の次元に配置される
@@ -144,7 +144,7 @@ class EncoderBlock(nn.Module):
                  num_mlp_units: int):
         """
         Args:
-            num_input_units(int): 特徴マップ生成時の全結合層のユニット数
+            num_inputlayer_units(int): 特徴マップ生成時の全結合層のユニット数
             num_heads(int): マルチヘッドアテンションのヘッド数
             num_mlp_units(int): 多層パーセプトロンのユニット数
         """
