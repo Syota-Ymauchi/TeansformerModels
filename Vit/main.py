@@ -145,6 +145,7 @@ def main():
         plt.tight_layout()
         plt.show()
     # 学習と検証を行う
+    print_model_summary()
     train_eval()
 if __name__ == '__main__':
     main()
