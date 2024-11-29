@@ -142,6 +142,7 @@ def main():
         axs[2].set_xlabel('Epoch')
         axs[2].set_ylabel('Time (seconds)')
         axs[2].legend()
+        plt.tight_layout()
         plt.show()
 
 if __name__ == '__main__':
