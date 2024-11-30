@@ -48,13 +48,13 @@ class VisionTransformer(nn.Module):
         # [1, 1, 512] を作成して標準正規分布からランダムにサンプリングして初期化
         # nn.Parameter()で学習可能なパラメータとして定義する
         self.class_token = nn.Parameter(
-            torch.randn(1, 1, num_inputlayer_units)
+            torch.zeros(1, 1, num_inputlayer_units)
         )
         # 位置情報の定義
         # [1, 5(パッチ数+クラストークン分の1), 512] を作成して標準正規分布からランダムにサンプリングして初期化
         # nn.Parameter()で学習可能なパラメータとして定義する
         self.pos_embed = nn.Parameter(
-            torch.randn(1, num_patches + 1, num_inputlayer_units)
+            torch.zeros(1, num_patches + 1, num_inputlayer_units)
         )
         # ------[3]Encoderブロックの定義------
         # Encoderブロック
