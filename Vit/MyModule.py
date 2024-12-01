@@ -10,11 +10,13 @@ class MultiHeadSelfAttention(nn.Module):
         headjoin_layer: 各ヘッドから出力された特徴表現を線形変換するための全結合層
         scal: ソフトマックス関数入力前に適用するスケール値
     """
-    def __init__(self, num_inputlayer_units: int, num_heads: int):
+    def __init__(self, num_inputlayer_units: int, num_heads: int,
+                 dropout: float=0.3):
         """マルチヘッドアテンションに必要なレイヤー等の定義
         Args:
             num_inputlayer_units(int): 全結合層のユニット数
             num_heads(int): マルチヘッドアテンションのヘッド数
+            dropout(float): ドロップアウト率、デフォルトは0.3
         """
         super().__init__()
         # 特徴マップの特徴量をヘッドの数で分割出来るか確認
@@ -29,7 +31,11 @@ class MultiHeadSelfAttention(nn.Module):
         # データ拡張を行う全結合層の定義
         # 入力次元: 特徴マップの特徴量次元
         # 出力次元(ユニット数):　特徴量次元×3
-        self.expansion_layer = nn.Linear(num_inputlayer_units, num_inputlayer_units*3)
+        self.expansion_layer = nn.Linear(
+            num_inputlayer_units,
+            num_inputlayer_units*3,
+            bias=False
+        )
 
         # ソフトマックス関数のオーバーフロー対策のためのスケール値
         # 次元数の平方根(1/sart(dimention))
@@ -40,12 +46,16 @@ class MultiHeadSelfAttention(nn.Module):
         # 出力の次元数 : 入力の次元数と同じ
         self.headjoin_layer = nn.Linear(num_inputlayer_units, num_inputlayer_units)
 
+        # ドロップアウト層の定義
+        self.dropout = nn.Dropout(dropout)
+
     def forward(self, x: torch.Tensor):
         """順伝播の処理を行う
             Args: 
                 x(torch.Tensor) : 特徴マップ(batch size, 特徴量数
-                                    (1つ目のMHSAならクラストークン数+パッチサイズ数), 特徴量次元)
-                
+                (1つ目のMHSAならクラストークン数+パッチサイズ数), 特徴量次元)
+            Returns:
+                x(torch.Tensor): 特徴マップ(バッチサイズ, 特徴量数, 特徴量次元)
         """
         # 入力する特徴マップのテンソル(bs, 5, 512)から
         # バッチサイズと特徴量数を取得
@@ -77,6 +87,10 @@ class MultiHeadSelfAttention(nn.Module):
         attn = q @ k.transpose(-2, -1)
         attn = F.softmax(attn*self.scale, dim=-1)
 
+        # ドロップアウト層の適用
+        attn = self.dropout(attn)
+        
+
         # アテンションスコアattnとバリュー行列で行列積を計算
         # attn : [bs, 4, 5, 5] @ value : [bs, 4, 5, 128] ->
         # [bs, 4, 5, 128]
@@ -106,11 +120,14 @@ class MLP(nn.Module):
     """
     def __init__(self, 
                  num_input_layer_units: int,
-                 num_mlp_units: int):
+                 num_mlp_units: int,
+                 dropout: float=0.1):
         """2層の全結合層を定義
         Args:
             num_inputlayer(int): 特徴マップ生成時の全結合層のユニット数
             num_mlp_units(int): 多層パーセプトロンのユニット数
+            dropout(float): ドロップアウト率、デフォルトは0.1
+
         """
         super().__init__()
         # 隠れ層
@@ -119,6 +136,8 @@ class MLP(nn.Module):
         self.linear2 = nn.Linear(num_mlp_units, num_input_layer_units)
         # 活性化関数はGELU
         self.activation = nn.GELU()
+        # ドロップアウト層の定義
+        self.dropout = nn.Dropout(dropout)
     
     def forward(self, x:torch.Tensor):
         """順伝播処理を行う
@@ -127,7 +146,11 @@ class MLP(nn.Module):
         """
         x = self.linear1(x)
         x = self.activation(x)
+        # ドロップアウト層の適用
+        x = self.dropout(x)
         x = self.linear2(x)
+        # ドロップアウト層の適用
+        x = self.dropout(x)
         return x
 
 

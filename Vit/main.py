@@ -4,6 +4,7 @@ import torchvision.transforms as transforms
 import torchvision
 import torch
 import torch.nn.functional as F
+import torch.optim as optim
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from torchsummary import summary
@@ -20,8 +21,17 @@ def main():
         mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010])
 
     # 訓練データの正規化を行う変換器
-    train_transform = transforms.Compose([transforms.ToTensor(),
-                                        normalize_transform])
+    train_transform = transforms.Compose([
+        transforms.RandomHorizontalFlip(), # 水平方向にランダムに反転
+        transforms.RandomCrop(config.img_size, padding=4), # ランダムに切り取る
+        # 画像の明るさ、コントラスト、彩度をランダムに変更
+        transforms.ColorJitter(
+            brightness=0.2, # 明るさを0.8~1.2倍に変更
+            contrast=0.2, # コントラスト(明るさと暗さの差)を0.8~1.2倍に変更
+            saturation=0.2 # 彩度(色の鮮やかさ)を0.8~1.2倍に変更
+            ),
+        transforms.ToTensor(),
+        normalize_transform])
 
     # 検証用データの正規化を行う変換器
     val_transform = transforms.Compose([transforms.ToTensor(),
@@ -61,10 +71,14 @@ def main():
     )
 
     # optimizerの定義
-    optimizer = torch.optim.SGD(model.parameters(), lr=config.lr)
+    optimizer = torch.optim.SGD(model.parameters(), lr=config.lr, weight_decay=0.0005)
     # deviceの設定
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
+
+    # learning rate schedulerの定義
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer,
+                                                      T_max=config.num_epochs)
 
 
     def print_model_summary():
@@ -83,6 +97,7 @@ def main():
         val_losses = []
         val_accuracies = []
         times = []
+        best_val_loss = float('inf')
 
         # epochごとに学習と検証を行う
         for epoch in range(config.num_epochs):
@@ -113,8 +128,6 @@ def main():
             val_loss, val_accuracy = evalate(val_loader, model, loss_func)
             val_losses.append(val_loss)
             val_accuracies.append(val_accuracy)
-
-            # 終了時間を記録
             end_time = time.time()
             times.append(end_time - start_time)
             # エポック毎の損失と正解率を出力
@@ -124,6 +137,17 @@ def main():
             print(f'Train Accuracy: {train_accuracies[-1]:.4f}')
             print(f'Val Loss: {val_losses[-1]:.4f}')
             print(f'Val Accuracy: {val_accuracies[-1]:.4f}')
+
+            # 最良の検証損失を更新
+            if val_losses[-1] < best_val_loss:
+                best_val_loss = val_losses[-1]
+                # モデルの保存
+                torch.save(model.state_dict(), './saved_models/best_model.pth')
+                # optimizerの保存
+                torch.save(optimizer.state_dict(), './saved_models/best_optimizer.pth')
+
+            # learning rate schedulerの更新
+            scheduler.step()    
         total_time = sum(times)
         print(f'Total Time: {total_time:.2f} seconds')
         # グラフの描画

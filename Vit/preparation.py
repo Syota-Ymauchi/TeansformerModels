@@ -7,13 +7,13 @@ class ModelConfig:
     """パラメータの初期値を設定するクラス
     """
     def __init__(self):
-        self.num_epochs = 50 # 学習回数(エポック数)
+        self.num_epochs = 150 # 学習回数(エポック数)
         self.batch_size = 32 # バッチサイズ
         self.lr = 0.01 # 学習率
         self.img_size = 32 # 画像サイズ
-        self.patch_size = 16 # パッチサイズ
+        self.patch_size = 4 # パッチサイズ
         self.num_inputlayers = 512 # 入力層のユニット数
-        self.num_heads = 4 # ヘッド数
+        self.num_heads = 8 # ヘッド数
         self.num_mlp_units = 512 # MLPのユニット数
         self.num_layers = 6 # Encoderの層数
 
