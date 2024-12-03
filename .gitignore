@@ -4,3 +4,4 @@ __pycache__/
 dataset/
 cheek.ipynb
 data/
+tensorflow_env/
