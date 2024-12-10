@@ -2,5 +2,6 @@
 *.txt
 __pycache__/
 dataset/
-*.ipynb
+cheek.ipynb
 data/
+tensorflow_env/
