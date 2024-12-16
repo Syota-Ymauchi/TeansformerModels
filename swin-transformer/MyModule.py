@@ -25,8 +25,7 @@ class ResidualBlock(nn.Module):
     def forward(self, x):
         """
         Args:
-            x:
-                入力テンソル
+            x: 入力テンソル
         Returns:
             入力テンソルに残差ブロックの出力を加算したテンソル
         """
@@ -55,7 +54,7 @@ class ToPatches(nn.Module):
         """
         Args:
             in_channels(int): 入力画像のチャネル数(in_channels=3)
-            dim(int): 先見変換後のパッチデータの次元(dim=128)
+            dim(int): 線形変換後のパッチデータの次元(dim=128)
             patch_size(int): パッチ1辺のサイズ(patch_size=2)
         """
         super().__init__()
@@ -76,6 +75,7 @@ class ToPatches(nn.Module):
         Returns:
             torch.Tensor: パッチに分割されたテンソル
         """
+        # xの形状: (バッチサイズ(bs), チャネル数(3), 画像の高さ(32), 画像の幅(32))
         # F.unfoldでパッチに分割
         # kernel_size: パッチ1辺のサイズ(2)
         # stride: パッチ1辺のサイズ(2)
@@ -86,12 +86,91 @@ class ToPatches(nn.Module):
         x = F.unfold(x, kernel_size=self.patch_size, stride=self.patch_size).movedim(-2, -1)
 
         # パッチデータを線形変換
+        # 出力の形状: (バッチサイズ(bs), パッチ数(256), パッチのサイズ(128))
         x = self.projection(x)
         # 正規化を行う
         x = self.norm(x)
         return x 
-       
 
-    
+class AddPositionEmbedding(nn.Module):
+    """各パッチに位置情報を追加して特徴マップを生成する
+
+    Attributes:
+        pos_embedding: 位置情報として学習可能なパラメータ
+    """
+    def __init__(self, dim, num_patches):
+        """
+        Args:
+            dim(int): 線形変換後のパッチデータの次元(dim=128)
+            num_patches(int): パッチの数(num_patches=256)
+        """
+        super().__init__()
+        # (256, 128)の形状の位置情報を学習可能なパラメータを作成し、位置情報とする
+        self.pos_embedding = nn.Parameter(torch.Tensor(num_patches, dim))
+        
+    def forward(self, x):
+        """
+        Args:
+            x(torch.Tensor): パッチ分割後のデータ(bs, 256, 128)
+        Returns:
+            torch.Tensor: 位置情報を追加したテンソル
+        """
+        # 入力テンソルに位置情報を追加
+        return x + self.pos_embedding
+
+class ToEmbeddings(nn.Sequential):
+    """レイヤーを順次実行するSequentialクラスを継承したクラスを定義
+    """
+    def __init__(self, in_channels, dim, patch_size, num_patches, p_drop):
+        """
+        Args:
+            in_channels(int): 入力画像のチャネル数(in_channels=3)
+            dim(int): 線形変換後のパッチデータの次元(dim=128)
+            patch_size(int): パッチ1辺のサイズ(patch_size=2)
+            num_patches(int): パッチの数(num_patches=256)
+            p_drop(float): ドロップアウト率(p_drop=0.1)
+        """
+        super().__init__(
+            # ToPatchesでパッチに分割
+            ToPatches(in_channels, dim, patch_size),
+            # AddPositionEmbeddingで位置情報を追加
+            AddPositionEmbedding(dim, num_patches),
+            # nn.Dropoutでドロップアウト
+            nn.Dropout(p_drop)
+        )
+
+class ShiftedWindowAttention(nn.Module):
+    """nn.Moduleクラスを継承したカスタムレイヤー
+
+    Swin Transformerにおける次の機構を実装する
+    . Window-based Multi-Head Self-Attention (W-MSA)
+    . Shifted Window-based Multi-Head Self-Attention (SW-MSA)
+
+    Attributes:
+        heads: ヘッドの数
+        head_dim: ヘッドの次元
+        scale: スケールファクター
+        shape: 特徴マップ256個のパッチを正方行列にした時の形状(16, 16)
+        window_size: ウィンドウ1辺のサイズ(window_size=4)
+        shift_size: シフトサイズ
+        pos_enc: 位置情報のための学習可能なパラメータ
+    """
+    def __init__(self,dim, head_dim, shape, window_size, shift_size=0):
+        """
+        Args:
+            dim(int): 特徴マップにおけるパッチのサイズ
+                      dim=[128, 128, 256]から入手した第一要素の128
+            head_dim(int): ヘッドの次元
+            shape(tuple): 特徴マップ256個のパッチを正方行列にした時の形状(16, 16)
+                          shape = (image_size // patch_size, image_size // patch_size)
+                          shape = (32 // 2, 32 // 2) = (16, 16)
+
+            window_size(int): ウィンドウ1辺のサイズ(window_size=4)
+            shift_size(int): ウィンドウをシフトするサイズ(shift_size=0)
+        """
+        super().__init__()
+
+
+
 
 

@@ -13,7 +13,6 @@ from ignite.engine import Events, create_supervised_trainer, create_supervised_e
 import ignite.metrics as metrics # メトリクス
 import ignite.contrib.handlers as handlers # ハンドラ
 
-
 # パラメータの値の設定
 DATA_DIR = "./data"
 IMAGE_SIZE = 32
