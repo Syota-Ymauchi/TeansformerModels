@@ -169,6 +169,65 @@ class ShiftedWindowAttention(nn.Module):
             shift_size(int): ウィンドウをシフトするサイズ(shift_size=0)
         """
         super().__init__()
+        # パッチのサイズdimをヘッドのサイズhead_dimで割ってヘッドの数を計算
+        self.heads = dim // head_dim
+        # ヘッドのサイズをself.head_dimに設定
+        self.head_dim = head_dim
+        # ヘッドのサイズhead_dimの平方根の逆数を計算して
+        # スケーリングファクターを求める
+        # 0.5で1/2乗している
+        # -をつけているのは逆数を求めるため
+        self.scale = head_dim ** -0.5
+
+        self.shape = shape # 256個のパッチを正方行列にした時の形状(16, 16)
+        self.window_size = window_size # ウィンドウ1辺のサイズ(window_size=4)
+        self.shift_size = shift_size # ウィンドウをシフトするサイズを設定
+
+        # クリエ、キー、バリューを計算する全結合層を作成
+        # 入力次元数: dim(128,)
+        # 出力次元数: dim * 3 (128 * 3=384,)
+        self.to_qkv = nn.Linear(dim, dim*3)
+
+        # 各ヘッドの出力を結合するための全結合層を作成
+        # 入力次元数: パッチサイズ(128,)
+        #　ユニット数: パッチサイズ (128,)
+        self.unifyheads = nn.Linear(dim, dim)
+        # 相対位置エンコーディングのための学習可能なパラメータを作成
+        self.pos_enc = nn.Parameter(
+            torch.Tensor(self.heads, (2 * window_size - 1)**2))
+        # 相対位置エンコーディングが格納された1階層テンソルをブッファに登録する
+        self.register_buffer(
+            "relative_position_indices",
+            self.get_indices(window_size))
+        # シフトサイズが0より大きい場合はマスクを適用
+        if shift_size > 0:
+            # self.generate_mask()でマスクをを適用
+            self.register_buffer(
+                "mask", 
+                self.generate_mask(shape, window_size, shift_size))
+            
+    @staticmethod
+    def get_indices(window_size):
+        """相対位置インデックスを計算
+        Args:
+            window_size: ウィンドウ1辺のサイズ
+        Returns:
+            ウィンドウ内すべてのパッチを組み合わせた相対位置インデックス
+            (window_size(行), window_size(列), window_size(行), window_size(列))を
+            (window_size**4,)にフラット化したテンソル
+        """
+        # 0からwindow_size -1 までの1階層テンソル[0, 1, 2, 3]を作成
+        x = torch.arange(window_size, dtype=torch.long)
+        # xの要素を使って4次元のグリッドを作成
+        y1, x1, y2, x2 = torch.meshgrid(x, x, x, x, indexing='ij')
+        # 相対位置インデックスを求める
+        indices = ((y1 - y2 + window_size - 1) * (2 * window_size - 1) + (x1 - x2 + window_size - 1)).flatten()
+        return indices
+        
+
+
+
+
 
 
 
