@@ -99,7 +99,7 @@ class MultiHeadSelfAttention(nn.Module):
         # permuteの処理
         # バッチサイズ(32), ヘッド数(4), 特徴量数(5), 特徴量次元(128)を
         # バッチサイズ(32), 特徴量数, ヘッド数, 特徴量次元に並び替える
-        # dim=2でflatten -> [バッチサイズ(32), 5, 4×3] 
+        # dim=2でflatten -> [バッチサイズ(32), 5,4*128] 
         x = x.permute(0, 2, 1, 3).flatten(2)
 
         # 全結合層headjoin_layerに入力

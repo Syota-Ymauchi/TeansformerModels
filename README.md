@@ -1,11 +1,16 @@
 # Transformerの派生モデル
-参考文献
 
-vit
+画像認識のモデルのうち、Transformerをベースとしたモデルをまとめたディレクトリ
 
-チーム・カルポ. 『Vision Transformer/最新CNNアーキテクチャ 画像分類入門』. 秀和システム, 2024年10月
+# 参考文献
 
-Vision Transformerの実装コード
-現在 : マルチヘッドアテンションの実装　->　エンコーダーの実装
+> チーム・カルポ. 『Vision Transformer/最新CNNアーキテクチャ 画像分類入門』. 秀和システム, 2024年10月
+
+# 実装コード
+
+Vision Transformerのpytorchでの実装コード : Vit
+Vision Transformerのtensorflowでの実装コード : vit-tensorflow
+Swin Transformerのpytorchでの実装コード : swin-transformer
+
 
 
