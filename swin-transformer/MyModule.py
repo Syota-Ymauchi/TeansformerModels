@@ -79,12 +79,10 @@ class ToPatches(nn.Module):
         # F.unfoldでパッチに分割
         # kernel_size: パッチ1辺のサイズ(2)
         # stride: パッチ1辺のサイズ(2)
-        #
-        # F.unfoldの出力の形状: (バッチサイズ(bs), チャネル数(3), パッチ数(256), パッチのサイズ(2*2*3))
-        # .movedim(-2, -1): パッチ数とチャネル数を入れ替え
-        # 出力の形状: (バッチサイズ(bs), チャネル数(3), パッチ数(256), パッチのサイズ(2*2*3))
-        x = F.unfold(x, kernel_size=self.patch_size, stride=self.patch_size).movedim(-2, -1)
-
+        # F.unfoldの出力の形状: (パッチのサイズ(2*2*3), パッチ数(256),バッチサイズ(bs))
+        # movedim(1, -1)でバッチサイズとパッチ数を入れ替え
+        # (バッチサイズ(bs), パッチ数(256), パッチのサイズ(2*2*3))となる
+        x = F.unfold(x, kernel_size=self.patch_size, stride=self.patch_size).movedim(1, -1)
         # パッチデータを線形変換
         # 出力の形状: (バッチサイズ(bs), パッチ数(256), パッチのサイズ(128))
         x = self.projection(x)
@@ -223,7 +221,132 @@ class ShiftedWindowAttention(nn.Module):
         # 相対位置インデックスを求める
         indices = ((y1 - y2 + window_size - 1) * (2 * window_size - 1) + (x1 - x2 + window_size - 1)).flatten()
         return indices
+    
+    @staticmethod
+    def generate_mask(shape, window_size, shift_size):
+        """マスクを生成
+
+            シフトによってウィンドウが重なる場合、
+            ウィンドウの境界をまたぐ部分を検出するためのマスクを生成
+            ウィンドウの境界をまたぐアテンションスコアを無視するために使用される
+
+        Args:
+            shape(tuple):
+                特徴マップの256個のパッチを正方行列にした時の形状
+                画像1辺のサイズ(32)をパッチ1辺のサイズ(2)で割って
+                行、列のサイズshape(2)を取得
+                shape = (image_size // patch_size, image_size // patch_size)
+                shape = (32 // 2, 32 // 2) = (16, 16)
+            window_size(int): ウィンドウ1辺のサイズ(window_size=4)
+            shift_size(int): ウィンドウをシフトするサイズ
         
+        Returns:
+            異なる領域間のアテンションスコアを無視するために使用される
+            ブール値のマスクテンソル:
+            (1, ウィンドウの数, 1, ウィンドウ内のパッチ数, ウィンドウ内のパッチ数)
+        """
+        region_mask = torch.zeros(1, *shape, window_size, 1)
+        slices = [
+            slice(0, -window_size),
+            slice(-window_size, -shift_size),
+            slice(-shift_size, None)
+        ]
+        region_mask = 0
+        for i in slices:
+            for j in slices:
+                region_mask[:,i,j,:] = region_num
+                region_num += 1
+        mask_windows = ShiftedWindowAttention.split_windows(
+            region_mask, window_size).squeeze(-1)
+        diff_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
+        mask = diff_mask != 0
+        return mask
+
+    @staticmethod
+    def split_windows(x, window_size):
+        """window_sizeに基づいてバッチテンソルxをウィンドウに分割
+
+        Args:
+            x: バッチテンソル(bs, パッチ数(行), パッチ数(列), パッチサイズ)
+            window_size: ウィンドウ1辺のサイズ(window_size=4)
+        Returns:
+            ウィンドウに分割されたテンソル
+            (bs * ウィンドウの数, ウィンドウ内のパッチ数(window_size**2), パッチサイズ)
+        """ 
+        # 行方向のウィンドウ数n_hと列方向のウィンドウ数n_wを計算
+        n_h, n_w = x.size(1) // window_size, x.size(2) // window_size
+        # パッチ行列をウィドウに分割する
+        # x.unflatten(1, (n_h, window_size))で[bs, パッチ数(行),\
+        # パッチ数(列), パッチサイズ ]が
+        # [bs,ウィドウ数(行), ウィドウサイズ(行), パッチ数, パッチサイズ]に変換される
+        # .unflatten(-2, (n_w, window_size))で
+        # [bs,ウィドウ数(行), ウィドウサイズ(行), パッチ数, パッチサイズ]が
+        # [bs, ウィドウ数(行), ウィドウサイズ(行),\
+        #  ウィドウ数(列), ウィドウサイズ(列), パッチサイズ]に変換される 
+        x = x.unflatten(1, (n_h, window_size)).unflatten(-2, (n_w, window_size))
+        # 第3次元(window_size)と第4次元(ウィドウ数(列))を入れ替えて
+        # 第一次元、第二次元、第三次元をフラット化
+        # x.transpose(2, 3)で[bs, ウィドウ数(行), ウィドウサイズ(行),ウィドウ数(列), ウィドウサイズ(列), パッチサイズ]が
+        # [bs, ウィドウ数(行), ウィンドウ数(列), ウィドウサイズ(行), ウィドウサイズ(列), パッチサイズ]に変換される
+        # .flatten(0, 2)で[bs, ウィドウ数(行), ウィンドウ数(列), ウィドウサイズ(行), ウィドウサイズ(列), パッチサイズ]が
+        # [bs * ウィンドウの数(行 * 列), ウィドウサイズ(行), ウィドウサイズ(列), パッチサイズ]に変換される
+        x = x.transpose(2, 3).flatten(0, 2)
+        # [bs * ウィンドウの数(行 * 列), ウィドウサイズ(行), ウィドウサイズ(列), パッチサイズ]が
+        # [bs * ウィンドウの数(行 * 列), ウィドウ内パッチ数, パッチサイズ]
+        x = x.flatten(-3, -2)
+        return x
+    
+    def forward(self, x):
+        """順伝播の処理
+
+        Args:
+            x: 特徴マップ(bs, パッチ数, パッチサイズ)
+        """
+        # シフト量とウィンドウ1辺のサイズをローカル変数に格納
+        shift_size, window_size = self.shift_size, self.window_size
+        # 特徴マップの各特徴をウィドウに分割し、必要に応じてシフトする
+        # xは[bs*ウィンドウ数, パッチ数(window_size**2), パッチサイズ]になる
+        x = self.to_windows(x,
+                            self.shape, # shape=(16, 16)
+                            window_size, 
+                            shift_size)
+        # 全結合層を使ってクリエ、キー、バリュー行列を作成
+        self.to_qkv(x).unflatten(-1, (3, self.heads, self.head_dim)).transpose(-2, 1)
+        
+    
+    def to_windows(self, x, shape, window_size, shift_size):
+        """特徴マップに対し、必要に応じてシフト処理を行い,
+            split.window()メゾットを実行してウィンドウに分割する
+        
+        Args:
+            x: 特徴マップ(bs, パッチ数, パッチサイズ)
+            shape(tuple):
+            特徴マップの256個のパッチを正方行列にした時の形状
+            画像1辺のサイズ(32)をパッチ1辺のサイズ(2)で割って
+            行、列のサイズshape(2)を取得
+            shape = (image_size // patch_size, image_size // patch_size)
+            shape = (32 // 2, 32 // 2) = (16, 16)
+            window_size(int): ウィンドウ1辺のサイズ(window_size=4)
+            shift_size(int): ウィンドウをシフトするサイズ
+        Returns:
+            x: 特徴マップをwindow_sizeに従って分割処理した後のテンソル
+                (bs*ウィンドウ数, パッチ数(window_size**2), パッチサイズ)
+        """
+        # [bs, パッチ数(256), パッチサイズ(2)]が
+        # [bs, 16, 16, 2]
+        x = x.unflatten(1, shape)
+        if shift_size > 0:
+            x = x.roll((-shift_size, -shift_size), dim=(1, 2))
+        x = self.split_windows(x, window_size)
+        return x
+
+        
+
+      
+    
+        
+
+     
 
 
 
